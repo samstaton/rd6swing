@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+firmware/cache/
+firmware/out/
+*.syx
+*.bin
+.DS_Store

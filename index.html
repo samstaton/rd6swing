@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>rd6swing</title>
+<style>
+  :root {
+    --paper: #fbfaf7; --text: #232220; --dim: #74716b; --rule: #dcd8cf; --tint: #efece5;
+    --blue: #315f8c; --green: #2f6f45; --amber: #8f5a10; --red: #a3302a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper: #191816; --text: #e8e5de; --dim: #9b978e; --rule: #3a3833; --tint: #24231f;
+            --blue: #8fb3d9; --green: #86c39a; --amber: #e2b064; --red: #ec8f86; }
+  }
+  html { background: var(--paper); }
+  body { margin: 0 auto; max-width: 640px; padding: 32px 16px 80px; color: var(--text);
+         font: 16px/1.55 ui-sans-serif, "Helvetica Neue", Arial, sans-serif; }
+  header { border-bottom: 2px solid var(--text); padding-bottom: 10px; margin-bottom: 8px; }
+  header h1 { font: 700 28px/1.1 ui-monospace, Menlo, monospace; letter-spacing: -0.5px; margin: 0; }
+  header p { margin: 6px 0 0; color: var(--dim); }
+  .stage { display: grid; grid-template-columns: 34px 1fr; gap: 0 12px; padding: 18px 0; border-bottom: 1px solid var(--rule); }
+  .stage > .num { font: 700 20px/1.3 ui-monospace, Menlo, monospace; color: var(--dim); }
+  .stage h2 { font-size: 17px; margin: 0 0 4px; }
+  .stage p { margin: 4px 0; }
+  .choice { display: flex; gap: 8px; align-items: baseline; margin: 6px 0; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  button { font: 600 15px/1 ui-sans-serif, "Helvetica Neue", Arial, sans-serif; padding: 10px 16px; cursor: pointer;
+           border: 2px solid var(--text); background: transparent; color: var(--text); border-radius: 3px; }
+  button.go { background: var(--text); color: var(--paper); }
+  button.hot { background: var(--amber); border-color: var(--amber); color: var(--paper); }
+  button:disabled { opacity: 0.35; cursor: not-allowed; }
+  .note { margin-top: 10px; padding: 8px 12px; border-left: 4px solid var(--rule); background: var(--tint); white-space: pre-wrap; }
+  .note.good { border-color: var(--green); } .note.busy { border-color: var(--amber); } .note.fail { border-color: var(--red); }
+  meter { width: 100%; height: 10px; margin-top: 10px; }
+  .warn { margin: 16px 0 0; padding: 10px 12px; border: 2px solid var(--amber); }
+  .sim { background: var(--amber); color: var(--paper); padding: 4px 10px; display: inline-block; margin-bottom: 10px; }
+  .swing { border-collapse: collapse; margin: 8px 0; font-variant-numeric: tabular-nums; }
+  .swing td, .swing th { border: 1px solid var(--rule); padding: 3px 10px; text-align: center; }
+  .swing th { text-align: left; font-weight: 600; }
+  .credit { margin-top: 18px; color: var(--dim); font-size: 14px; }
+  details { margin-top: 18px; color: var(--dim); }
+  pre { font: 12px/1.4 ui-monospace, Menlo, monospace; background: var(--tint); padding: 8px; max-height: 240px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+  a { color: var(--blue); }
+</style>
+</head>
+<body>
+  <div class="sim" id="simTag" hidden>Simulator: no hardware is involved.</div>
+  <header>
+    <h1>rd6swing</h1>
+    <p>Per-pattern swing for the Behringer RD-6 via a firmware patch.</p>
+  </header>
+
+  <div class="warn">Unofficial firmware, not made or supported by Behringer. As usual, updating firmware can leave a device unusable if it goes wrong, and may affect your warranty. This loader has been used on one RD-6 so far. Use at your own risk. </div>
+
+  <div class="stage">
+    <div class="num">1</div>
+    <div>
+      <h2>Connect</h2>
+      <p>Connect RD-6 via USB, switched on, stopped. Close other music software. Give browser permission to use MIDI devices. Chrome may be best.</p>
+      <div class="buttons"><button id="btnConnect" class="go">Connect</button></div>
+      <div id="devNote" class="note">Not connected.</div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="num">2</div>
+    <div>
+      <h2>Keep a copy of your patterns</h2>
+      <p>Click to read the 32 patterns and settings into a file. Read-only.</p>
+      <div class="buttons"><button id="btnBackup" disabled>Download patterns</button></div>
+      <div id="backupNote" class="note">Connect first.</div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="num">3</div>
+    <div>
+      <h2>Update</h2>
+      <label class="choice"><input type="radio" name="job" value="swing" checked><span><b>Install rd6swing v4</b> (reports version 1.0.6)</span></label>
+      <label class="choice"><input type="radio" name="job" value="stock"><span><b>Restore Behringer 1.0.6</b></span></label>
+      <p>Either way the page needs Behringer's 1.0.6 update file:</p>
+      <label class="choice"><input type="radio" name="src" value="mirror" checked><span>download it from the <a href="https://github.com/tracelistener/rd6-scatter">Scatter</a> project's copy</span></label>
+      <label class="choice"><input type="radio" name="src" value="local"><span>use a file I have: <input type="file" id="localFile" accept=".syx"></span></label>
+      <label class="choice"><input type="checkbox" id="ack"><span>I'll keep the RD-6 connected and this tab open and in front until it finishes.</span></label>
+      <div class="buttons">
+        <button id="btnGo" class="go" disabled>Install rd6swing v4</button>
+        <button id="btnStop" hidden>Stop</button>
+      </div>
+      <meter id="bar" min="0" max="383" value="0" hidden></meter>
+      <div id="jobNote" class="note">Connect first.</div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="num">?</div>
+    <div>
+      <h2>Setting the swing</h2>
+      <p>With a pattern playing, hold FUNCTION and press a step button. The playing pattern keeps that swing.</p>
+      <table class="swing">
+        <tr><th>Step</th><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td></tr>
+        <tr><th>Swing</th><td>off</td><td>54%</td><td>58%</td><td>62%</td><td>66%</td><td>71%</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <p class="credit">Heavily inspired by tracelistener's <a href="https://github.com/tracelistener/rd6-scatter">Scatter</a>.</p>
+
+  <details>
+    <summary>Log</summary>
+    <div class="buttons"><button id="btnLog">Download log</button></div>
+    <pre id="logBox"></pre>
+  </details>
+
+<script type="module">
+import { Rd6, BrowserPort, FakeRd6, Refusal, MIRROR_106, SUPPORTED_VERSIONS, buildInstall, buildOfficial, digest } from './js/rd6swing.js';
+
+const el = id => document.getElementById(id);
+const simulated = new URLSearchParams(location.search).has('sim');
+const app = { rd6: null, device: null, working: false, armedAt: 0, stopping: false, history: [], started: performance.now() };
+
+function note(event, detail = {}) {
+  const entry = { t: Math.round(performance.now() - app.started), event, ...detail };
+  app.history.push(entry);
+  const box = el('logBox');
+  box.textContent = (box.textContent + JSON.stringify(entry) + '\n').slice(-50000);
+  box.scrollTop = box.scrollHeight;
+}
+function tell(id, tone, text) { el(id).className = 'note ' + tone; el(id).textContent = text; }
+function download(name, text) {
+  const link = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([text], { type: 'application/json' })), download: name });
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+}
+const today = () => new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '_');
+const picked = name => document.querySelector(`input[name=${name}]:checked`).value;
+const disarm = () => { app.armedAt = 0; };
+
+function render() {
+  const ready = !!app.device && !app.working;
+  const app_mode = app.device?.mode === 'app';
+  const supported = !app_mode || SUPPORTED_VERSIONS.includes(app.device.version);
+  const armed = app.armedAt && performance.now() - app.armedAt < 6000;
+  const label = picked('job') === 'swing' ? 'Install rd6swing v4' : 'Restore Behringer 1.0.6';
+  el('btnGo').textContent = armed ? `Confirm: ${label.toLowerCase()}` : label;
+  el('btnGo').className = armed ? 'hot' : 'go';
+  el('btnGo').disabled = !ready || !supported || !el('ack').checked || (picked('src') === 'local' && !el('localFile').files.length);
+  el('btnConnect').disabled = app.working;
+  el('btnBackup').disabled = !ready || !app_mode;
+  el('btnStop').hidden = !app.transferring;
+  document.querySelectorAll('input').forEach(i => { i.disabled = app.working; });
+}
+
+async function connect() {
+  disarm(); app.working = true; render();
+  tell('devNote', 'busy', 'Looking for the RD-6...');
+  try {
+    if (!app.rd6) {
+      let port;
+      if (simulated) port = new FakeRd6({ version: [1, 0, 5] });
+      else {
+        if (!navigator.requestMIDIAccess) throw new Refusal('This browser has no Web MIDI. Use Chrome or Edge on a computer.');
+        try { port = new BrowserPort(await navigator.requestMIDIAccess({ sysex: true })); }
+        catch { throw new Refusal('MIDI permission was refused. Allow it from the icon left of the address bar, reload, and connect again.'); }
+      }
+      app.rd6 = new Rd6(port, note);
+    }
+    await app.rd6.connect();
+    app.device = await app.rd6.identify();
+    note('identified', app.device);
+    const d = app.device;
+    if (d.mode === 'app' && SUPPORTED_VERSIONS.includes(d.version)) {
+      tell('devNote', 'good', `Connected: the RD-6 reports firmware ${d.version}.` + (d.version === '1.0.6' ? ' Behringer 1.0.6 and rd6swing both report 1.0.6.' : ''));
+    } else if (d.mode === 'app') {
+      tell('devNote', 'fail', `Connected, but the RD-6 reports ${d.version}. This loader only replaces 1.0.5 or 1.0.6.`);
+    } else if (d.mode === 'update') {
+      tell('devNote', 'busy', 'Connected: the RD-6 is in update mode (waiting for firmware). Install or Restore will continue from here.');
+    } else {
+      app.device = null;
+      tell('devNote', 'fail', "An RD-6 port is there but nothing answered. Press STOP, check the cable, and connect again.");
+    }
+    tell('backupNote', '', app.device?.mode === 'app' ? 'Ready.' : 'Only while the RD-6 is running normally.');
+    tell('jobNote', '', app.device ? 'Ready.' : 'Connect first.');
+  } catch (e) {
+    app.device = null;
+    note('connect_failed', { error: String(e) });
+    tell('devNote', 'fail', e instanceof Refusal ? e.message : `Couldn't connect: ${e.message}`);
+  } finally { app.working = false; render(); }
+}
+
+async function backup() {
+  disarm(); app.working = true; render();
+  tell('backupNote', 'busy', 'Reading...');
+  try {
+    const got = await app.rd6.readPatterns((n, of) => tell('backupNote', 'busy', `Reading ${n} of ${of}...`));
+    const flat = Uint8Array.from([...got.patterns.flatMap(p => p.data.match(/../g).map(h => parseInt(h, 16))), ...got.settings]);
+    download(`RD6_patterns_${today()}.json`, JSON.stringify({
+      format: 'rd6swing-patterns-v1', saved: new Date().toISOString(), firmware: app.device.version,
+      sha256: await digest(flat), settings: got.settings, patterns: got.patterns }, null, 1));
+    const swung = got.patterns.filter(p => p.swing && p.swing > 50).map(p => `${p.group}-${p.pattern} ${p.swing}%`);
+    tell('backupNote', 'good', `Downloaded 32 patterns and the settings.${swung.length ? ' With swing: ' + swung.join(', ') + '.' : ''}`);
+  } catch (e) {
+    app.device = null;
+    note('backup_failed', { error: String(e) });
+    tell('backupNote', 'fail', `Reading stopped (${e.message}). Nothing on the RD-6 changed. Connect again before anything else.`);
+  } finally { app.working = false; render(); }
+}
+
+async function officialFile() {
+  if (picked('src') === 'local') return new Uint8Array(await el('localFile').files[0].arrayBuffer());
+  let res;
+  try { res = await fetch(MIRROR_106, { cache: 'no-cache' }); }
+  catch { throw new Refusal("Couldn't download the 1.0.6 file. Check the connection, or use a file you have."); }
+  if (!res.ok) throw new Refusal(`Couldn't download the 1.0.6 file (HTTP ${res.status}). Use a file you have instead.`);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+async function patchJson() {
+  const res = await fetch('./patches/rd6swing-v4.json', { cache: 'no-cache' });
+  if (!res.ok) throw new Refusal(`Couldn't load the rd6swing patch (HTTP ${res.status}).`);
+  return res.json();
+}
+
+let wakeLock = null;
+async function holdScreen() { try { wakeLock = await navigator.wakeLock?.request('screen'); } catch { wakeLock = null; } }
+document.addEventListener('visibilitychange', () => {
+  if (!app.transferring) return;
+  if (document.hidden) { note('tab_hidden'); tell('jobNote', 'busy', 'Bring this tab back to the front: the update slows down while it is hidden.'); }
+  else holdScreen();
+});
+window.addEventListener('beforeunload', e => { if (app.working) { e.preventDefault(); e.returnValue = ''; } });
+
+async function go() {
+  if (app.working) return;
+  const now = performance.now();
+  if (!app.armedAt || now - app.armedAt > 6000) { app.armedAt = now; render(); setTimeout(render, 6100); return; }
+  if (now - app.armedAt < 500) return;   // a double-click is not a confirmation
+  disarm();
+  const swing = picked('job') === 'swing';
+  app.working = true; app.transferring = true; app.stopping = false; render();
+  el('bar').hidden = false; el('bar').value = 0;
+  const say = text => tell('jobNote', 'busy', text);
+  note('run', { job: swing ? 'install rd6swing v4' : 'restore 1.0.6', source: picked('src') });
+  await holdScreen();
+  try {
+    say('Preparing the firmware...');
+    const base = await officialFile();
+    const file = swing ? await buildInstall(base, await patchJson()) : await buildOfficial(base);
+    note('firmware_ready', { label: file.label, sha256: await digest(file.bytes), version: file.version });
+    await app.rd6.connect();
+    await app.rd6.toUpdateMode(say);
+    say("Sending the firmware. Keep the RD-6 connected.");
+    await app.rd6.send(file, (n, of) => { el('bar').value = n; say(`Sending ${n} of ${of}. Keep the RD-6 connected.`); }, () => app.stopping);
+    say('Sent. Waiting for the RD-6 to restart...');
+    const v = await app.rd6.confirmRestart(file.version);
+    app.device = { mode: 'app', version: v };
+    tell('devNote', 'good', `Connected: the RD-6 reports firmware ${v}.`);
+    tell('jobNote', 'good', swing ? `Finished. The RD-6 restarted and reports ${v}. To try it: play a pattern, hold FUNCTION, press step 4.`
+                                  : `Finished. Behringer 1.0.6 is installed; the RD-6 restarted and reports ${v}.`);
+  } catch (e) {
+    app.device = null;
+    const partial = app.rd6?.partial;
+    note('run_failed', { error: String(e), partial: !!partial });
+    const what = e instanceof Refusal ? e.message : `Stopped: ${e.message}.`;
+    const after = partial
+      ? '\nThe firmware on the RD-6 may now be incomplete. Keep it connected, download the log, connect again and run the update again from update mode.'
+      : '';
+    tell('jobNote', 'fail', what + after);
+    tell('devNote', 'busy', 'Connect again to check the RD-6.');
+  } finally {
+    try { await wakeLock?.release(); } catch {}
+    app.working = false; app.transferring = false; render();
+  }
+}
+
+el('btnConnect').addEventListener('click', connect);
+el('btnBackup').addEventListener('click', backup);
+el('btnGo').addEventListener('click', go);
+el('btnStop').addEventListener('click', () => { app.stopping = true; note('stop_pressed'); tell('jobNote', 'busy', 'Stopping after the current message...'); });
+el('btnLog').addEventListener('click', () => download(`rd6swing_log_${today()}.json`, JSON.stringify({ simulated, agent: navigator.userAgent, events: app.history }, null, 1)));
+document.querySelectorAll('input').forEach(i => i.addEventListener('change', () => { disarm(); render(); }));
+el('simTag').hidden = !simulated;
+render();
+</script>
+</body>
+</html>
