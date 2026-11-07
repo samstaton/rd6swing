@@ -1,7 +1,7 @@
 """Build rd6swing: assemble, link, patch Behringer's RD-6 1.0.6, verify, re-encode, make the browser patch.
 
-    .venv/bin/python build.py   -> ../patches/rd6swing-v4.json  (committed: the loader applies it)
-                                   out/RD6_Swing_v4.syx, out/swing106.bin, cache/stock106.bin  (git-ignored)
+    .venv/bin/python build.py   -> ../patches/rd6swing-v5.json  (committed: the loader applies it)
+                                   out/RD6_Swing_v5.syx, out/swing106.bin, cache/stock106.bin  (git-ignored)
 
 Behringer's official 1.0.6 update file is not in this repository. It is fetched into cache/ from the
 Scatter project's unmodified mirror (the same source the loader uses) and checked by SHA-256.
@@ -18,7 +18,7 @@ BASE = 0x08002800
 CACHE = os.path.join(HERE, 'cache')
 STOCK_SYX = os.path.join(CACHE, 'RD-6_V1.0.6.syx')
 STOCK_URL = 'https://tracelistener.github.io/rd6-scatter/firmware/RD-6_V1.0.6.syx'
-PATCH = os.path.join(HERE, '..', 'patches', 'rd6swing-v4.json')
+PATCH = os.path.join(HERE, '..', 'patches', 'rd6swing-v5.json')
 STOCK_SYX_SHA = '4446914dffce8152dc7f7c0065de52d266f062a6499a22a8fef36b221982cfc3'
 STOCK_BIN_SHA = 'e20968a504ccf4302039cb99cfe647acab4f8bd12515b87a8828fd61a46d1656'
 LLVM = '/opt/homebrew/opt/llvm/bin/'
@@ -32,10 +32,12 @@ HOOKS = {
     '.hook_enq':  (0x08002DD4, bytes.fromhex('064a054b'), 'b.w', 'sw_enq'),
     '.hook_main': (0x080072E8, bytes.fromhex('074810b5'), 'b.w', 'sw_main'),
     '.hook_blank': (0x08005BB8, bytes.fromhex('41708270'), 'b.w', 'sw_blank'),
+    '.hook_sysex': (0x08008528, bytes.fromhex('5c2925d1'), 'b.w', 'sw_sysex'),
 }
 # absolute branches inside the new code: symbol -> (mnemonic, target)
 ABS = {'DISPATCH_BODY': 0x08006AE8, 'T14_DISPLACED': 0x08007A74, 'ENQ_BODY': 0x08002DD8,
-       'EE_WRITE': 0x0800383A, 'EE_READ': 0x0800381C, 'SAVE_BODY': 0x080072EC, 'BLANK_REST': 0x08005BBC}
+       'EE_WRITE': 0x0800383A, 'EE_READ': 0x0800381C, 'SAVE_BODY': 0x080072EC, 'BLANK_REST': 0x08005BBC,
+       'SYSEX_5C': 0x0800852C, 'SYSEX_DONE': 0x08008578, 'SYX_TO_USB': 0x080058B8, 'USB_SEND': 0x08007D28}
 
 
 def pack7(raw):
@@ -144,7 +146,7 @@ def main():
         checks.append(f'{name} @ {addr:#010x}: {ins.mnemonic} {ins.op_str} = {target}')
 
     ta, text = secs['.text']
-    assert ta == 0x0800B380 and len(text) <= 0x200, len(text)
+    assert ta == 0x0800B380 and len(text) <= 0x800, len(text)   # the blank region is ~19 KB; the mask-run check below is the real limit
     off = ta - BASE
     assert not any(img[off:off + len(text)]), 'target region not blank'
     img[off:off + len(text)] = text
@@ -172,17 +174,19 @@ def main():
     back = decode(new_syx)
     assert back['image'] == bytes(img) and back['version'] == '1.0.6' and back['sum'] == back['imgsum']
     assert back['run'] >= 64, back['run']
-    out_syx = os.path.join(OUT, 'RD6_Swing_v4.syx')
+    out_syx = os.path.join(OUT, 'RD6_Swing_v5.syx')
     open(out_syx, 'wb').write(new_syx)
 
     runs = syx_patch(syx, new_syx)
+    build_no = int(next(l.split(',')[1] for l in open(os.path.join(HERE, 'swing.s')) if l.split()[:2] == ['.equ', 'BUILD,']))
     patch = {
         'format': 'rd6swing-syx-patch-v1',
-        'name': 'rd6swing v4',
+        'name': 'rd6swing v5',
+        'build': build_no,
         'note': 'Byte runs to apply to Behringer\'s official RD-6 1.0.6 SysEx update file. Contains only '
                 'rd6swing\'s changes; the base file is Behringer\'s and is not included.',
         'base': {'name': 'Behringer RD-6 firmware 1.0.6', 'size': len(syx), 'sha256': STOCK_SYX_SHA},
-        'target': {'name': 'rd6swing v4 (reports 1.0.6)', 'size': len(new_syx),
+        'target': {'name': 'rd6swing v5 (reports 1.0.6)', 'size': len(new_syx),
                    'sha256': hashlib.sha256(new_syx).hexdigest(),
                    'image_sha256': hashlib.sha256(img).hexdigest()},
         'runs': runs,

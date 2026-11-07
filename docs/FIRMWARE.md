@@ -1,12 +1,14 @@
 # rd6swing firmware patch
 
-rd6swing v4 is Behringer RD-6 firmware 1.0.6 with a patch. It reports version 1.0.6. `firmware/build.py` produces it (SysEx SHA-256 `f8b01169…`) and the loader's patch file. (v3 left the 32nd scale straight.)
+rd6swing v5 is Behringer RD-6 firmware 1.0.6 with a patch. It reports version 1.0.6, and answers an identity query as rd6swing build 5. `firmware/build.py` produces it (SysEx SHA-256 `5468b29a…`) and the loader's patch file. (v4 had no identity query; v3 left the 32nd scale straight.)
 
 ## Behaviour
 
 FUNCTION + step 1–6 sets the swing of the loaded pattern to 50 (off), 54, 58, 62, 66 or 71%. It works in Pattern Play, Track Play and, while stopped, Pattern Write: the modes in which the stock firmware routes FUNCTION + step to 0x08004CC8 with a pattern loaded.
 
 Each odd (off-beat) step of a pattern in the 16th or 32nd scale (header byte 1 = 0 or 1) is played (2s − 1) × S late, where S is the measured length of the previous step: swing of the step grid, as on Elektron sequencers. Patterns in the two triplet scales play straight. The step clock, step lights, Sync Out and MIDI clock are not delayed.
+
+The SysEx message `F0 00 20 32 00 01 0D 00 60 F7`, a command the stock firmware ignores, is answered over USB with `F0 00 20 32 00 01 0D <device id> 61 'rd6swing' 00 05 F7`. Stock firmware, and rd6swing before v5, do not answer it. Like the stock version query, it is accepted for device id 0 and for the RD-6's own id.
 
 ## Storage
 
@@ -30,7 +32,7 @@ The decoded image loads at 0x08002800, above a 10 KB bootloader. The update file
 
 ## Hooks
 
-Six 4-byte sites. `build.py` asserts the stock bytes at each before patching.
+Seven 4-byte sites. `build.py` asserts the stock bytes at each before patching.
 
 | Site | Stock | Patched |
 |---|---|---|
@@ -40,12 +42,13 @@ Six 4-byte sites. `build.py` asserts the stock bytes at each before patching.
 | 0x08002DD4, MIDI out enqueue | two 16-bit literal loads | `b.w sw_enq` |
 | 0x080072E8, main-loop save routine | `ldr r0, =0x20000200; push {r4, lr}` | `b.w sw_main` |
 | 0x08005BB8, blank-pattern initialization | `strb r1, [r0, #1]; strb r2, [r0, #2]` | `b.w sw_blank` |
+| 0x08008528, SysEx handler, last test for commands 0x1D–0x74 | `cmp r1, #0x5c; bne <return>` | `b.w sw_sysex` |
 
 - **`sw_tick`** counts TIMER14 ticks in its own counter, because the stock counter at 0x2000110C + 8 is reset by the MIDI clock routine. When a delayed step's countdown ends, it runs the stock dispatcher. It drops the step if the transport has stopped or the step index has changed.
 - **`sw_disp`** measures S on that counter. On an odd step of a swung pattern it stores D = S·k/256 and returns.
 - **`sw_enq`** runs the stock enqueue with interrupts masked, because notes are now also queued from TIMER14. Scatter v1.4 takes the same approach at the same site.
 
-The state block lives at 0x20003000 behind a magic word. It is set up by the first step or the first swing setting after power-on, with the previous-step time set to the current tick. No stock code references RAM above the initial stack pointer, 0x20001730. The new code is 456 bytes at 0x0800B380, in the blank region the loader recovers the mask from; 149 of its 153 blocks remain.
+The state block lives at 0x20003000 behind a magic word. It is set up by the first step or the first swing setting after power-on, with the previous-step time set to the current tick. No stock code references RAM above the initial stack pointer, 0x20001730. The new code is 544 bytes at 0x0800B380, in the blank region the loader recovers the mask from; 148 of its 153 blocks remain.
 
 ## Checks
 
@@ -80,6 +83,7 @@ The state block lives at 0x20003000 behind a magic word. It is set up by the fir
   - Every odd step is delayed, including after Stop, 19 clocks while stopped, then Continue, and with length 15.
   - In the 32nd scale every odd step is delayed; in the 8th-triplet scale, nothing is.
   - The notes are the same as stock.
+- **SysEx:** every command byte 00–7F except 60, in four message shapes, gives the same USB replies, EEPROM writes, RAM and GPIO as stock. Command 60 gets the identity reply, with the RD-6's device id, and no reply when addressed to another device.
 
 Calls run one at a time, so interrupt preemption is not modelled. Sync In (TIMER2) and Track mode are not exercised.
 

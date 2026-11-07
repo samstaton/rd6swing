@@ -7,7 +7,7 @@ import { Rd6, FakeRd6, BrowserPort, Refusal, buildInstall, buildOfficial, readUp
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const base = new Uint8Array(readFileSync(join(root, 'firmware/cache/RD-6_V1.0.6.syx')));
-const patch = JSON.parse(readFileSync(join(root, 'patches/rd6swing-v4.json'), 'utf8'));
+const patch = JSON.parse(readFileSync(join(root, 'patches/rd6swing-v5.json'), 'utf8'));
 const recorded = JSON.parse(readFileSync(join(root, 'tests/fixtures/rd6_protocol.json'), 'utf8'));
 const FAST = 20;   // simulator and loader waits both run 20x faster
 
@@ -123,6 +123,26 @@ for (const [what, faults, limit] of [
   const again = await outcome(async () => { await rd6.connect(); await rd6.toUpdateMode(); await rd6.send(swing); return rd6.confirmRestart('1.0.6'); });
   check(again.value === '1.0.6' && !rd6.partial, 'a clean retry from update mode finishes and clears the partial flag');
 }
+
+// ---- which build is running (v5 and later answer SysEx 60)
+{
+  const ask = async opts => { const dev = fake(opts); const rd6 = link(dev); await rd6.connect(); return rd6.whoami(); };
+  check(await ask({ build: 5 }) === 5 && await ask({}) === null, 'identity query: rd6swing v5 answers 5; stock stays silent');
+  const dev = fake(); dev.mode = 'update'; const rd6 = link(dev); await rd6.connect();
+  check(await rd6.whoami() === null && !dev.got.length, 'identity query in update mode: no answer, not taken as firmware');
+}
+for (const [what, file, after, ok] of [
+  ['install v5, comes back as v5', swing, 5, true],
+  ['install v5, comes back without the identity', swing, null, false],
+  ['restore 1.0.6, comes back silent', stock, null, true],
+  ['restore 1.0.6, comes back still answering as rd6swing', stock, 5, false],
+]) {
+  const dev = fake({ version: [1, 0, 6], build: 4, buildAfterUpdate: after });
+  const rd6 = link(dev);
+  const r = await outcome(async () => { await rd6.connect(); await rd6.toUpdateMode(); await rd6.send(file); return rd6.confirmRestart(file.version, file.build); });
+  check(ok ? r.value === '1.0.6' && !rd6.partial : r.error instanceof Refusal && /rd6swing/.test(r.error.message), `${what}: ${ok ? 'accepted' : 'flagged'}`);
+}
+check(swing.build === 5 && stock.build === null, 'the patch file says which build it makes (5); the official file none');
 
 // ---- pattern backup
 {

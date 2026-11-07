@@ -7,6 +7,10 @@ EE_WRITE      = 0x0800383B;   /* stock EEPROM write (address, source, length) + 
 EE_READ       = 0x0800381D;   /* stock EEPROM read (address, destination, length) */
 SAVE_BODY     = 0x080072ED;   /* stock main-loop save routine after its first two instructions */
 BLANK_REST    = 0x08005BBD;   /* stock blank-pattern init after the two replaced stores */
+SYSEX_5C      = 0x0800852D;   /* stock SysEx handler: command 0x5C */
+SYSEX_DONE    = 0x08008579;   /* stock SysEx handler: return */
+SYX_TO_USB    = 0x080058B9;   /* stock: SysEx bytes to USB-MIDI packets */
+USB_SEND      = 0x08007D29;   /* stock: send USB-MIDI packets */
 
 SECTIONS
 {
@@ -16,6 +20,7 @@ SECTIONS
   .hook_enq  0x08002DD4 : { *(.hook_enq) }
   .hook_main 0x080072E8 : { *(.hook_main) }
   .hook_blank 0x08005BB8 : { *(.hook_blank) }
+  .hook_sysex 0x08008528 : { *(.hook_sysex) }
   .text      0x0800B380 : { *(.text) }
   /DISCARD/ : { *(.ARM.attributes) *(.comment) }
 }

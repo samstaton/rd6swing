@@ -22,6 +22,7 @@ KEYS = 0x20000224                            # +8 CLEAR held, +0xC FUNCTION held
 DISPATCH, TIMER13, TIMER14, FUNC_STEP, STEP_KEY = 0x08006AE4, 0x08007528, 0x080075F0, 0x08004CC8, 0x08004CEC
 ENQ, ENQ_BODY, EE_WRITE, EE_READ, SAVE_FN, BLANK, MIDI_RT = 0x08002DD4, 0x08002DD8, 0x0800383A, 0x0800381C, 0x080072E8, 0x08005BA0, 0x080052F8
 SAVEFLAGS = 0x20000200
+SYSEX, USB_SEND, DEVICE_ID, MSG = 0x08008408, 0x08007D28, 0x200001FC, 0x20002800
 GPIO_LOG = {0x48000018: 'A_set', 0x48000028: 'A_clr', 0x48000418: 'B_set', 0x48000428: 'B_clr',
             0x48000818: 'C_set', 0x48000828: 'C_clr', 0x48001418: 'F_set', 0x48001428: 'F_clr'}
 K = [round((2 * s / 100 - 1) * 256) for s in (50, 54, 58, 62, 66, 71)]   # from the percentages, not from swing.s
@@ -50,6 +51,8 @@ class RD6:
         uc.hook_add(UC_HOOK_CODE, self._enq, begin=ENQ_BODY, end=ENQ_BODY)
         for a in (EE_READ, EE_WRITE):
             uc.hook_add(UC_HOOK_CODE, self._ee, begin=a, end=a)
+        self.usb = []                                  # USB-MIDI packets handed to the stock USB send routine
+        uc.hook_add(UC_HOOK_CODE, self._usb, begin=USB_SEND, end=USB_SEND)
         # 0x08002A5C walks a pointer list that boot code sets up; not run here, so it returns at once
         uc.hook_add(UC_HOOK_CODE, lambda uc, a, n, d: uc.reg_write(UC_ARM_REG_PC, uc.reg_read(UC_ARM_REG_LR)), begin=0x08002A5C, end=0x08002A5C)
 
@@ -78,6 +81,20 @@ class RD6:
         else:
             uc.mem_write(p, bytes(self.eeprom[a:a + n]))
         uc.reg_write(UC_ARM_REG_PC, uc.reg_read(UC_ARM_REG_LR))
+
+    def _usb(self, uc, addr, size, data):
+        buf, n = uc.reg_read(UC_ARM_REG_R0), uc.reg_read(UC_ARM_REG_R1)
+        self.usb.append(bytes(uc.mem_read(buf, n)))
+        uc.reg_write(UC_ARM_REG_PC, uc.reg_read(UC_ARM_REG_LR))
+
+    def sysex(self, body, port=1):
+        msg = bytes([0xF0, 0x00, 0x20, 0x32, 0x00, 0x01, 0x0D]) + bytes(body) + b'\xf7'
+        self.uc.mem_write(MSG, msg + bytes(16))
+        try:
+            self.call(SYSEX, MSG, port, limit=2_000_000)
+            return 'returned'
+        except Exception as e:
+            return type(e).__name__
 
     def w32(self, a, v): self.uc.mem_write(a, (v & 0xFFFFFFFF).to_bytes(4, 'little'))
     def w16(self, a, v): self.uc.mem_write(a, (v & 0xFFFF).to_bytes(2, 'little'))
@@ -417,6 +434,39 @@ def test_midi_clock():
         check(sorted(b for _, b in st.enq) == sorted(b for _, b in sw.enq), f'MIDI clock, {name}: the same notes as stock (timing aside)')
 
 
+def usb_to_sysex(packets):
+    out = bytearray()
+    for i in range(0, len(packets), 4):
+        cin = packets[i] & 0x0F
+        out += packets[i + 1:i + 1 + {4: 3, 5: 1, 6: 2, 7: 3}.get(cin, 0)]
+    return bytes(out)
+
+
+def test_sysex():
+    same, differing = True, []
+    for cmd in range(0x80):
+        if cmd == 0x60: continue
+        for extra in ((), (0,), (1, 2), (0x30,)):
+            out = []
+            for img in (STOCK, SWING):
+                m = RD6(img); m.setup(rows(2), playing=False)
+                how = m.sysex([0x00, cmd, *extra])
+                out.append((how, m.usb, m.ee_writes, m.ram(), m.log))
+            if out[0] != out[1]: differing.append((hex(cmd), extra))
+    check(not differing, f'SysEx commands 00-7F except 60, four message shapes each: replies, EEPROM, RAM and GPIO as stock {differing[:4]}')
+    want = bytes([0xF0, 0x00, 0x20, 0x32, 0x00, 0x01, 0x0D, 0x00, 0x61]) + b'rd6swing' + bytes([0x00, 5, 0xF7])
+    st = RD6(STOCK); st.setup(rows(2)); st.sysex([0x00, 0x60])
+    sw = RD6(SWING); sw.setup(rows(2)); how = sw.sysex([0x00, 0x60])
+    got = usb_to_sysex(b''.join(sw.usb))
+    check(how == 'returned' and not st.usb and len(sw.usb) == 1 and got == want,
+          f'SysEx 60: stock stays silent; rd6swing answers {got.hex(" ") if got else None}')
+    sw = RD6(SWING); sw.setup(rows(2)); sw.w8(DEVICE_ID, 5); sw.sysex([0x05, 0x60])
+    got = usb_to_sysex(b''.join(sw.usb))
+    check(got[:7] + got[8:] == want[:7] + want[8:] and got[7] == 5, 'SysEx 60 to device 5: the answer carries device id 5, as the stock version reply does')
+    sw = RD6(SWING); sw.setup(rows(2)); sw.w8(DEVICE_ID, 5); sw.sysex([0x03, 0x60])
+    check(not sw.usb, 'SysEx 60 addressed to another device: no answer')
+
+
 if __name__ == '__main__':
     test_identity()
     test_setting()
@@ -425,4 +475,5 @@ if __name__ == '__main__':
     test_deferral()
     test_bars()
     test_midi_clock()
+    test_sysex()
     print('\nFAILURES:', failures if failures else 'none')

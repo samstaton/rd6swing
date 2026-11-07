@@ -29,6 +29,7 @@ export const ASK = {
   toUpdate: sysex(0x03, 0x30),    // application acknowledges, then re-enumerates as the bootloader
   settings: sysex(0x75),
   pattern: (g, p) => sysex(0x77, g, p),
+  build: sysex(0x60),             // rd6swing v5 and later answer 61 'rd6swing' 00 <build>; stock ignores it
 };
 
 export const toHex = (b, sep = ' ') => [...b].map(x => x.toString(16).padStart(2, '0')).join(sep);
@@ -120,12 +121,12 @@ export async function buildInstall(base, patch) {
   if (patch.base.sha256 !== OFFICIAL_106.sha256) throw new Refusal('The patch is for a different base file.');
   const bytes = patchFile(base, patch);
   if (await digest(bytes) !== patch.target.sha256) throw new Refusal('The patched firmware failed its checksum. Nothing was sent.');
-  return { bytes, label: patch.name, ...readUpdateFile(bytes) };
+  return { bytes, label: patch.name, build: patch.build ?? null, ...readUpdateFile(bytes) };
 }
 
 export async function buildOfficial(base) {
   await requireOfficial(base);
-  return { bytes: base, label: 'Behringer 1.0.6', ...readUpdateFile(base) };
+  return { bytes: base, label: 'Behringer 1.0.6', build: null, ...readUpdateFile(base) };
 }
 
 // ==== talking to the RD-6 ====
@@ -206,6 +207,15 @@ export class Rd6 {
     return { mode: 'silent' };
   }
 
+  // Read-only, application only: the rd6swing build number, or null (stock, or rd6swing before v5).
+  async whoami() {
+    this.inbox = [];
+    const r = await this.askQuietly(ASK.build, 400);
+    await this.flushAfter(100);
+    const name = [...'rd6swing'].map(c => c.charCodeAt(0));
+    return r && r[0] === 0x61 && same(r.slice(1, 9), name) && r[9] === 0 && r.length === 11 ? r[10] : null;
+  }
+
   // Application -> bootloader. Writes nothing.
   async toUpdateMode(progress = () => {}) {
     const now = await this.identify();
@@ -260,8 +270,9 @@ export class Rd6 {
     this.note('all_acknowledged', { messages: frames.length });
   }
 
-  // The RD-6 restarts after the last block; it must come back reporting the file's version.
-  async confirmRestart(version) {
+  // The RD-6 restarts after the last block; it must come back reporting the file's version, and,
+  // when `build` is given, answer the identity query with that build (null: must not answer).
+  async confirmRestart(version, build) {
     this.disconnect();
     if (await this.until(false, 6000)) await this.until(true, 20000); else await this.delay(4000);
     await this.delay(800);
@@ -273,6 +284,13 @@ export class Rd6 {
         lastMode = id.mode;
         if (id.mode === 'app') {
           if (id.version !== version) throw new Refusal(`After restarting, the RD-6 reports ${id.version}, not ${version}.`);
+          if (build !== undefined) {
+            const got = await this.whoami();
+            if (got !== build) {
+              throw new Refusal(build === null ? `After restarting, the RD-6 answers as rd6swing v${got}, not as Behringer's firmware.`
+                : `After restarting, the RD-6 ${got === null ? 'does not answer as rd6swing' : `answers as rd6swing v${got}`}, not as rd6swing v${build}.`);
+            }
+          }
           this.partial = false;
           this.note('restarted', { version: id.version });
           return id.version;
@@ -352,11 +370,13 @@ export class BrowserPort {
 // bootloader answers only the update commands, in order. `faults` makes it misbehave on purpose:
 // noAnswerAt, refuseAt, doubleAnswerAt (message numbers 0-382), ignoreSwitch, noUsbChange,
 // silentAfter (never restarts), restartsInUpdateMode, reportsVersion (after the restart).
+// `build` is the rd6swing build the fake answers as (null: like stock); `buildAfterUpdate` replaces it
+// when the fake restarts after an update.
 // `recorded` is tests/fixtures/rd6_protocol.json: when given, the fake answers with the bytes a real
 // RD-6 sent rather than with this module's own expectations.
 export class FakeRd6 {
-  constructor({ version = [1, 0, 6], faults = {}, speedUp = 1, recorded = null } = {}) {
-    Object.assign(this, { version, faults, speedUp, mode: 'app', plugged: true, opened: false, deliver: null });
+  constructor({ version = [1, 0, 6], faults = {}, speedUp = 1, recorded = null, build = null, buildAfterUpdate } = {}) {
+    Object.assign(this, { version, faults, speedUp, build, buildAfterUpdate, mode: 'app', plugged: true, opened: false, deliver: null });
     const rec = recorded?.answers;
     const bytes = h => h.split(' ').map(x => parseInt(x, 16));
     this.setupAnswers = rec ? ['update:04', 'update:06', 'update:08 40', 'update:08 00', 'update:03 30'].map(k => bytes(rec[k][0])) : SETUP_ANSWERS;
@@ -397,6 +417,7 @@ export class FakeRd6 {
     }
     if (c === 0x77) return this.answer([0x78, a, rest[0], ...this.patterns[a * 16 + rest[0]].flatMap(x => [x >> 4, x & 15])]);
     if (c === 0x75) return this.answer([0x76, ...this.settings]);
+    if (c === 0x60 && this.build !== null) return this.answer([0x61, ...[...'rd6swing'].map(ch => ch.charCodeAt(0)), 0x00, this.build]);
   }
 
   bootloader(b, raw) {
@@ -424,6 +445,7 @@ export class FakeRd6 {
         this.plugged = true; this.next = 0;
         if (f.restartsInUpdateMode) return;
         this.mode = 'app'; this.version = f.reportsVersion ?? v;
+        if (this.buildAfterUpdate !== undefined) this.build = this.buildAfterUpdate;
       });
     }
   }

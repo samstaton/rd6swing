@@ -1,4 +1,4 @@
-@ rd6swing v4: a patch on Behringer RD-6 firmware 1.0.6 (decoded image loaded at 0x08002800).
+@ rd6swing v5: a patch on Behringer RD-6 firmware 1.0.6 (decoded image loaded at 0x08002800).
 @
 @ Pattern header byte 3 holds the swing: 0xA0 | level, level 0-5 = 50 (off), 54, 58, 62, 66, 71 %.
 @ Any other value means no swing. Patterns in the 16th and 32nd scales (byte 1 = 0, 1) swing every
@@ -9,6 +9,9 @@
 @ Each odd step is played late by (2s - 1) x the measured length of the previous step. Step
 @ boundaries stay where they are; the stock dispatcher (triggers, accent, clap, MIDI notes) runs
 @ later, from TIMER14.
+@
+@ SysEx F0 00 20 32 00 01 0D 00 60 F7 (a command stock ignores) is answered with
+@ F0 00 20 32 00 01 0D <id> 61 'rd6swing' 00 <build> F7, so a loader can tell rd6swing from stock.
 
         .syntax unified
         .thumb
@@ -37,6 +40,9 @@
         .equ MIN_STEP,    40            @ plausible step lengths, TIMER14 ticks
         .equ MAX_STEP,    32767
         .equ EE_PATTERNS, 0x800         @ 32 pattern slots of 64 bytes
+        .equ ID_ASK,      0x60          @ SysEx command the stock handler ignores
+        .equ BUILD,       5
+        .equ DEVICE_ID,   0x200001FC    @ u8 the RD-6's SysEx device id
 
 @ ---- hooks: 4 bytes each
 
@@ -52,6 +58,8 @@
         b.w     sw_main
         .section .hook_blank, "ax"      @ 0x08005BB8 blank-pattern init; was strb r1, [r0, #1]; strb r2, [r0, #2]
         b.w     sw_blank
+        .section .hook_sysex, "ax"      @ 0x08008528 SysEx handler, last test for commands 0x1D-0x74; was cmp r1, #0x5c; bne <return>
+        b.w     sw_sysex
 
 @ ---- new code
 
@@ -163,6 +171,41 @@ sw_init:
         str     r2, [r0, #SW_MAGIC]
         bx      lr
 
+@ SysEx handler (main loop). r1 = command byte. Stock goes on to 0x5C's handling or returns.
+        .thumb_func
+sw_sysex:
+        cmp     r1, #0x5C
+        bne     1f
+        b.w     SYSEX_5C                @ the stock test passed
+1:      cmp     r1, #ID_ASK
+        bne     2f
+        bl      sw_ident
+2:      b.w     SYSEX_DONE              @ the handler's return, as for any command it doesn't know
+
+@ Send the identity reply over USB, the way the stock version reply (0x080082CC) does.
+        .thumb_func
+sw_ident:
+        push    {lr}
+        sub     sp, #60                 @ USB packets at sp (28 bytes), message at sp + 32 (20 bytes)
+        adr     r1, sw_id_msg
+        add     r0, sp, #32
+        movs    r2, #20
+3:      subs    r2, r2, #1
+        ldrb    r3, [r1, r2]
+        strb    r3, [r0, r2]
+        bne     3b
+        ldr     r1, =DEVICE_ID
+        ldrb    r1, [r1]
+        strb    r1, [r0, #7]
+        mov     r1, sp
+        movs    r2, #20
+        bl      SYX_TO_USB              @ (message, packets, length) -> packet bytes
+        mov     r1, r0
+        mov     r0, sp
+        bl      USB_SEND                @ (packets, bytes)
+        add     sp, #60
+        pop     {pc}
+
 @ Blank-pattern init: also clear the swing byte. r0 = PATTERN, r1 = 0, r2 = 16.
         .thumb_func
 sw_blank:
@@ -271,3 +314,10 @@ sw_enq:
         pop     {r4, pc}
 
         .ltorg
+
+@ Data after the code and its literal pool.
+        .align  2
+sw_id_msg:
+        .byte   0xF0, 0x00, 0x20, 0x32, 0x00, 0x01, 0x0D, 0x00, ID_ASK + 1
+        .ascii  "rd6swing"
+        .byte   0x00, BUILD, 0xF7

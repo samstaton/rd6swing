@@ -78,14 +78,14 @@
     <div class="num">3</div>
     <div>
       <h2>Update</h2>
-      <label class="choice"><input type="radio" name="job" value="swing" checked><span><b>Install rd6swing v4</b> (reports version 1.0.6)</span></label>
+      <label class="choice"><input type="radio" name="job" value="swing" checked><span><b>Install rd6swing v5</b> (reports version 1.0.6)</span></label>
       <label class="choice"><input type="radio" name="job" value="stock"><span><b>Restore Behringer 1.0.6</b></span></label>
       <p>Either way the page needs Behringer's 1.0.6 update file:</p>
       <label class="choice"><input type="radio" name="src" value="mirror" checked><span>download it from the <a href="https://github.com/tracelistener/rd6-scatter">Scatter</a> project's copy</span></label>
       <label class="choice"><input type="radio" name="src" value="local"><span>use a file I have: <input type="file" id="localFile" accept=".syx"></span></label>
       <label class="choice"><input type="checkbox" id="ack"><span>I'll keep the RD-6 connected and this tab open and in front until it finishes.</span></label>
       <div class="buttons">
-        <button id="btnGo" class="go" disabled>Install rd6swing v4</button>
+        <button id="btnGo" class="go" disabled>Install rd6swing v5</button>
         <button id="btnStop" hidden>Stop</button>
       </div>
       <meter id="bar" min="0" max="383" value="0" hidden></meter>
@@ -142,7 +142,7 @@ function render() {
   const app_mode = app.device?.mode === 'app';
   const supported = !app_mode || SUPPORTED_VERSIONS.includes(app.device.version);
   const armed = app.armedAt && performance.now() - app.armedAt < 6000;
-  const label = picked('job') === 'swing' ? 'Install rd6swing v4' : 'Restore Behringer 1.0.6';
+  const label = picked('job') === 'swing' ? 'Install rd6swing v5' : 'Restore Behringer 1.0.6';
   el('btnGo').textContent = armed ? `Confirm: ${label.toLowerCase()}` : label;
   el('btnGo').className = armed ? 'hot' : 'go';
   el('btnGo').disabled = !ready || !supported || !el('ack').checked || (picked('src') === 'local' && !el('localFile').files.length);
@@ -168,10 +168,12 @@ async function connect() {
     }
     await app.rd6.connect();
     app.device = await app.rd6.identify();
+    if (app.device.mode === 'app') app.device.build = await app.rd6.whoami();
     note('identified', app.device);
     const d = app.device;
     if (d.mode === 'app' && SUPPORTED_VERSIONS.includes(d.version)) {
-      tell('devNote', 'good', `Connected: the RD-6 reports firmware ${d.version}.` + (d.version === '1.0.6' ? ' Behringer 1.0.6 and rd6swing both report 1.0.6.' : ''));
+      tell('devNote', 'good', d.build ? `Connected: the RD-6 runs rd6swing v${d.build} (firmware ${d.version}).`
+        : `Connected: the RD-6 reports firmware ${d.version}` + (d.version === '1.0.6' ? ': Behringer\'s, or rd6swing before v5.' : '.'));
     } else if (d.mode === 'app') {
       tell('devNote', 'fail', `Connected, but the RD-6 reports ${d.version}. This loader only replaces 1.0.5 or 1.0.6.`);
     } else if (d.mode === 'update') {
@@ -217,7 +219,7 @@ async function officialFile() {
 }
 
 async function patchJson() {
-  const res = await fetch('./patches/rd6swing-v4.json', { cache: 'no-cache' });
+  const res = await fetch('./patches/rd6swing-v5.json', { cache: 'no-cache' });
   if (!res.ok) throw new Refusal(`Couldn't load the rd6swing patch (HTTP ${res.status}).`);
   return res.json();
 }
@@ -241,7 +243,7 @@ async function go() {
   app.working = true; app.transferring = true; app.stopping = false; render();
   el('bar').hidden = false; el('bar').value = 0;
   const say = text => tell('jobNote', 'busy', text);
-  note('run', { job: swing ? 'install rd6swing v4' : 'restore 1.0.6', source: picked('src') });
+  note('run', { job: swing ? 'install rd6swing v5' : 'restore 1.0.6', source: picked('src') });
   await holdScreen();
   try {
     say('Preparing the firmware...');
@@ -249,14 +251,15 @@ async function go() {
     const file = swing ? await buildInstall(base, await patchJson()) : await buildOfficial(base);
     note('firmware_ready', { label: file.label, sha256: await digest(file.bytes), version: file.version });
     await app.rd6.connect();
+    if (simulated) app.rd6.port.buildAfterUpdate = file.build;
     await app.rd6.toUpdateMode(say);
     say("Sending the firmware. Keep the RD-6 connected.");
     await app.rd6.send(file, (n, of) => { el('bar').value = n; say(`Sending ${n} of ${of}. Keep the RD-6 connected.`); }, () => app.stopping);
     say('Sent. Waiting for the RD-6 to restart...');
-    const v = await app.rd6.confirmRestart(file.version);
-    app.device = { mode: 'app', version: v };
-    tell('devNote', 'good', `Connected: the RD-6 reports firmware ${v}.`);
-    tell('jobNote', 'good', swing ? `Finished. The RD-6 restarted and reports ${v}. To try it: play a pattern, hold FUNCTION, press step 4.`
+    const v = await app.rd6.confirmRestart(file.version, file.build);
+    app.device = { mode: 'app', version: v, build: file.build };
+    tell('devNote', 'good', file.build ? `Connected: the RD-6 runs rd6swing v${file.build} (firmware ${v}).` : `Connected: the RD-6 runs Behringer's firmware ${v}.`);
+    tell('jobNote', 'good', swing ? `Finished. The RD-6 restarted and answers as rd6swing v${file.build}. To try it: play a pattern, hold FUNCTION, press step 4.`
                                   : `Finished. Behringer 1.0.6 is installed; the RD-6 restarted and reports ${v}.`);
   } catch (e) {
     app.device = null;

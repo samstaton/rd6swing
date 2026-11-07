@@ -1,0 +1,63 @@
+{
+ "format": "rd6swing-syx-patch-v1",
+ "name": "rd6swing v5",
+ "build": 5,
+ "note": "Byte runs to apply to Behringer's official RD-6 1.0.6 SysEx update file. Contains only rd6swing's changes; the base file is Behringer's and is not included.",
+ "base": {
+  "name": "Behringer RD-6 firmware 1.0.6",
+  "size": 116186,
+  "sha256": "4446914dffce8152dc7f7c0065de52d266f062a6499a22a8fef36b221982cfc3"
+ },
+ "target": {
+  "name": "rd6swing v5 (reports 1.0.6)",
+  "size": 116186,
+  "sha256": "5468b29a4f481e90adc21fdaf610731c4927d0010a74f8e7a7f1905dffe8e6f9",
+  "image_sha256": "608a20b8a145a435a2442f0f7eaf9fcf9c937a41d4889df6fefdc2b841c76175"
+ },
+ "runs": [
+  [
+   67,
+   "I0wP"
+  ],
+  [
+   1882,
+   "IwBNKAwLYA=="
+  ],
+  [
+   11454,
+   "BT9DCUhE"
+  ],
+  [
+   16018,
+   "TQQYAmJpXg=="
+  ],
+  [
+   20691,
+   "Rz1rHTk="
+  ],
+  [
+   23158,
+   "RCVBCXZH"
+  ],
+  [
+   24134,
+   "NDJTeGRbfig="
+  ],
+  [
+   28786,
+   "CC9mFgMcNlULdE4="
+  ],
+  [
+   43058,
+   "Y3NSZVRRKQURImY9MShFe3x9fgsuCnJpKn0OEigDPVhaUBkFTAEKJnc/FnY3Cm8KFDRVLQlMMDARVWsOKkt3XH9VajZnAA1sdXUjBTYMKEtFUnIbVFIKTlhFcAIjd0NZJHAqUElVFVpoI1pwQg5/HnolBipWZx1XUU1EEQJWV2wvH0Axakl3FEw0IyY1KVJjGAgnc3I="
+  ],
+  [
+   43222,
+   "HBMdWklxT0dTAzZwfyp/dTRTAV54eQM6Hho3BgUSJF5oBSVzYk8Kb09fBkEGMjxnT2QhFUZbRDkUL1MDSV4VL3R8ZVhdKk8zGBUJIm16Gg8mG0EacVRTWVIkcy1SAH0aEUtEUXJrGj5YSUg0JThbV1gqTkx9eiRNAVEWXQIiFHR2Unc7XlBUMVkNfUczZwRdCQkleAZ2PRolLRMyf31oG1J+amoGSHIIGw0ALlVLHhx6I0cvbjEoJnQ/FnY2Cgg7UH1aOAl1Mxd9dQUvICNCDDYFO0ZyLylwNU8hBQgMMEoSMCdLWFN7ahNCKGw5XBopXAEdAH03cnslGT4QRRxwZVRdPG0NPDFRREBMIQ0NTDBLA1BQMwpMAEwXOiU/VxhBMGA4Xjs="
+  ],
+  [
+   43530,
+   "WhMjDAwDUW8DejAVThYsO2M7QzZ1eQduHxUnGG1IQk9rPExhCT8/AWx3Vld3ZDt1aHY7YDAxPA03FzIrO38cWDkCQ0B8C0c2bSR2dHFlGg40WgAyW0YOOSBWQHdDVXJbNSs2PRAdPAByRU4/SEdAUmIqeyNPMyVFQ0kCXwNrUW9qWSFALw4XOFlVCD1aARB9cXNyH313W3oYaG9lFxFnCzcOVwtESgNEJ30bKyNGXiN5S0F7JHc3"
+  ]
+ ]
+}
