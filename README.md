@@ -2,6 +2,8 @@
 
 Per-pattern swing for the Behringer RD-6 via  a firmware patch. Unofficial; not made or supported by Behringer or Music Tribe.
 
+Loader (Chrome or Edge): **https://samstaton.github.io/rd6swing/**
+
 As ever, updating firmware can leave a device unusable if it fails, and may affect the warranty. The loader has been used on one RD-6 (6 November 2026), and also tested against a simulated RD-6. Use at your own risk. 
 
 Heavily inspired by tracelistener's <a href="https://github.com/tracelistener/rd6-scatter">Scatter</a>, which is a different firmware mod for the RD-6.
