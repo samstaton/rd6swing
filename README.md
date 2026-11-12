@@ -1,54 +1,56 @@
 # rd6swing
 
-Per-pattern swing for the Behringer RD-6 via  a firmware patch. Unofficial; not made or supported by Behringer or Music Tribe.
+Firmware patch that gives swing to the Behringer RD-6. (Unofficial and unsupported!)
 
 Loader (Chrome or Edge): **https://samstaton.github.io/rd6swing/**
 
-As ever, updating firmware can leave a device unusable if it fails, and may affect the warranty. The loader has been used on one RD-6 (6 November 2026), and also tested against a simulated RD-6. Use at your own risk. 
+As ever, updating firmware can leave a device unusable if it fails, and may affect the warranty, etc.. The loader has been used on my RD-6 (6 November 2026), and also tested against a simulated RD-6, but **use at your own risk**. 
 
-Heavily inspired by tracelistener's <a href="https://github.com/tracelistener/rd6-scatter">Scatter</a>, which is a different firmware mod for the RD-6.
+Heavily inspired by tracelistener's <a href="https://github.com/tracelistener/rd6-scatter">Scatter</a>, which is a different firmware mod for the RD-6. I learnt a lot from that. 
 
 ## Swing
 
-Hold FUNCTION and press a step button. The swing is stored in the loaded pattern.
+Hold FUNCTION and press a step button. 
 
 | Step | 1 | 2 | 3 | 4 | 5 | 6 |
 |---|---|---|---|---|---|---|
 | Swing | off | 54% | 58% | 62% | 66% | 71% |
 
-Every other step plays late by the chosen amount: the off-beat 16ths, or in the 32nd scale the off-beat 32nds. The step clock, Sync Out and MIDI clock are unchanged. Patterns without a stored swing, and patterns in the triplet scales, play straight. Clearing a pattern clears its swing.
+The swing setting is stored in the loaded pattern. Patterns in the triplet scales will still play straight. 
 
 https://github.com/user-attachments/assets/2097fa7f-c68f-4523-8770-69d8303d0217
 
 ## Install
 
-Open the loader in Chrome or Edge: **https://samstaton.github.io/rd6swing/**
+Open the loader in a midi compatible browser, e.g. Chrome or Edge: **https://samstaton.github.io/rd6swing/**
 
-Add `?sim=1` to the address for a simulated RD-6. To run the loader from a copy of this repository instead, use `./serve.sh` and open http://127.0.0.1:8771/.
+You can also run it from a copy of this repository instead. Use `./serve.sh` and open http://127.0.0.1:8771/.
 
-The loader needs Behringer's 1.0.6 update file. It downloads the copy kept by the [Scatter](https://github.com/tracelistener/rd6-scatter) project, or uses a file you choose, and checks its SHA-256 (`4446914d…`). It then applies `patches/rd6swing-v5.json` and checks the result (`5468b29a…`) before sending anything. The loader only replaces firmware 1.0.5 or 1.0.6. After the RD-6 restarts, the loader checks that it answers as rd6swing v5 (or, after a restore, that it doesn't).
+The loader needs Behringer's 1.0.6 update file. You can download the copy kept by the [Scatter](https://github.com/tracelistener/rd6-scatter) project, or use a file you choose. It will checks the SHA-256 (`4446914d…`). It then applies `patches/rd6swing-v5.json` and checks the result (`5468b29a…`) before sending it across. The loader will only work with firmware 1.0.5 or 1.0.6. After the RD-6 restarts, the loader will check that it answers as rd6swing v5.
 
-## Build and test
+Add `?sim=1` to the address for a simulated RD-6. 
+
+## Repo structure
+
+### Build and test scripts
 
 ```sh
 cd firmware
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python build.py        # needs clang and Homebrew llvm (ld.lld)
+.venv/bin/python build.py        # I used clang and Homebrew llvm (ld.lld)
 .venv/bin/python test_emu.py     # stock and patched firmware side by side in Unicorn
-cd .. && node tests/sim_test.mjs # the loader against the simulated RD-6
+cd .. && node tests/sim_test.mjs # runs the loader against the simulated RD-6
 ```
 
-`build.py` downloads the official file into `firmware/cache/` (git-ignored) and writes the patch.
+### Other files
 
-## Files
-
-- `index.html`, `js/rd6swing.js`: the loader.
-- `patches/rd6swing-v5.json`: the patch, as byte runs on the official update file.
-- `tests/fixtures/rd6_protocol.json`: replies recorded from a real RD-6, used by the simulated one.
+- `index.html`, `js/rd6swing.js`: loader.
+- `patches/rd6swing-v5.json`: the patch (byte runs on the official update file).
+- `tests/fixtures/rd6_protocol.json`: replies recorded from my RD-6.
 - `firmware/`: patch source, build and emulator tests.
-- `docs/FIRMWARE.md`: how the patch works.
+- `docs/FIRMWARE.md`: details about the patch.
 
 
 ## Licence
 
-MIT ([LICENSE](LICENSE)), for this repository's own files. Behringer's firmware is not included and is not covered.
+MIT ([LICENSE](LICENSE)), for this repository's files. (Behringer's firmware isn't included and is not covered of course.)
