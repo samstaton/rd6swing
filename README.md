@@ -18,7 +18,7 @@ Hold FUNCTION and press a step button. The swing is stored in the loaded pattern
 
 Every other step plays late by the chosen amount: the off-beat 16ths, or in the 32nd scale the off-beat 32nds. The step clock, Sync Out and MIDI clock are unchanged. Patterns without a stored swing, and patterns in the triplet scales, play straight. Clearing a pattern clears its swing.
 
-https://github.com/user-attachments/assets/e92e3ac5-6647-4ca6-a3cc-f61021bb93ac
+https://github.com/user-attachments/assets/2097fa7f-c68f-4523-8770-69d8303d0217
 
 ## Install
 
