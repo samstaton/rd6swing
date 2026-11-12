@@ -1,6 +1,6 @@
 # rd6swing
 
-The Behringer RD-6 is a [TR606|https://en.wikipedia.org/wiki/Roland_TR-606] inspired drum machine, but it has no built-in swing/shuffle. Here's a firmware patch that gives it swing. (Unofficial and unsupported!)
+The Behringer RD-6 is a [TR606](https://en.wikipedia.org/wiki/Roland_TR-606) inspired drum machine, but it has no built-in swing/shuffle. Here's a firmware patch that gives it swing. (Unofficial and unsupported!)
 
 Loader (Chrome or Edge): **https://samstaton.github.io/rd6swing/**
 
