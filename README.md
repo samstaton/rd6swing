@@ -18,7 +18,7 @@ Hold FUNCTION and press a step button.
 
 The swing setting is stored in the loaded pattern. Patterns in the triplet scales will still play straight. 
 
-https://github.com/user-attachments/assets/2097fa7f-c68f-4523-8770-69d8303d0217
+https://github.com/user-attachments/assets/a14f1c9a-1a05-4dc8-8fa5-30ad81f0c26c
 
 ## Install
 
